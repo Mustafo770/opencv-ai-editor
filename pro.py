@@ -26,6 +26,9 @@ SYSTEM_PROMPT = """Ты — помощник для редактирования
 - resize: изменить размер. Параметры width и height (в пикселях)
 - flip: отразить. Параметр direction: horizontal или vertical
 - red_channel: оставить только красный канал. Нет параметров.
+- green_channel: оставить только зелёный канал. Нет параметров.
+- blue_channel: оставить только синий канал. Нет параметров.
+- channel_select: выбрать каналы. Параметр channels: строка из букв R, G, B (например "RG" или "B")
 - edge_detection: выделить края. Нет параметров.
 - reset: сбросить изображение к исходному. Нет параметров.
 
@@ -37,6 +40,9 @@ SYSTEM_PROMPT = """Ты — помощник для редактирования
 {"command": "resize", "width": 640, "height": 480}
 {"command": "flip", "direction": "horizontal"}
 {"command": "red_channel"}
+{"command": "green_channel"}
+{"command": "blue_channel"}
+{"command": "channel_select", "channels": "RG"}
 {"command": "edge_detection"}
 {"command": "reset"}
 
@@ -126,6 +132,32 @@ def apply_command(image_bgr, cmd_json):
         # красный (индекс 2) остаётся
         return result, "✅ Только красный канал"
 
+    elif cmd == "green_channel":
+        result = image_bgr.copy()
+        result[:, :, 0] = 0   # синий = 0
+        result[:, :, 2] = 0   # красный = 0
+        # зелёный (индекс 1) остаётся
+        return result, "✅ Только зелёный канал"
+
+    elif cmd == "blue_channel":
+        result = image_bgr.copy()
+        result[:, :, 1] = 0   # зелёный = 0
+        result[:, :, 2] = 0   # красный = 0
+        # синий (индекс 0) остаётся
+        return result, "✅ Только синий канал"
+
+    elif cmd == "channel_select":
+        channels = cmd_json.get("channels", "RGB").upper()
+        result = image_bgr.copy()
+        # Обнуляем каналы, которые не выбраны
+        if 'B' not in channels:
+            result[:, :, 0] = 0  # синий
+        if 'G' not in channels:
+            result[:, :, 1] = 0  # зелёный
+        if 'R' not in channels:
+            result[:, :, 2] = 0  # красный
+        return result, f"✅ Выбраны каналы: {channels}"
+
     elif cmd == "edge_detection":
         gray   = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
         edges  = cv2.Canny(gray, threshold1=50, threshold2=150)
@@ -211,7 +243,8 @@ class App:
     
         hints = (
             "Примеры команд:  «Сделай чёрно-белым»  •  «Размой»  •  «Выдели края»  •  "
-            "«Увеличь яркость на 50»  •  «Отрази по горизонтали»  •  «Красный канал»  •  «Сброс»"
+            "«Увеличь яркость»  •  «Красный канал»  •  «Зелёный канал»  •  «Синий канал»  •  "
+            "«Выбери красный и зелёный каналы»  •  «Сброс»"
         )
         tk.Label(
             self.root, text=hints,
