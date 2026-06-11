@@ -35,7 +35,7 @@ pip install -r requirements.txt
 ## Запуск
 
 ```bash
-python app.py
+python pro.py
 ```
 
 ## Использование
