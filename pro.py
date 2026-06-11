@@ -11,9 +11,7 @@ import requests
 import json
 import threading
 
-# ─────────────────────────────────────────────
-# 1. СВЯЗЬ С LM STUDIO
-# ─────────────────────────────────────────────
+
 LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions"
 
 SYSTEM_PROMPT = """Ты — помощник для редактирования изображений.
@@ -48,7 +46,7 @@ SYSTEM_PROMPT = """Ты — помощник для редактирования
 def ask_llm(user_text):
     """Отправляет текст в LM Studio и получает JSON-команду."""
     payload = {
-        "model": "local-model",  # LM Studio игнорирует это поле — грузит загруженную модель
+        "model": "qwen2.5-coder-7b-instruct-spider-baseline",  # LM Studio игнорирует это поле — грузит загруженную модель
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user",   "content": user_text}
@@ -71,9 +69,6 @@ def ask_llm(user_text):
         return {"command": "error", "message": str(e)}
 
 
-# ─────────────────────────────────────────────
-# 2. ОБРАБОТКА ИЗОБРАЖЕНИЙ (OpenCV)
-# ─────────────────────────────────────────────
 
 def apply_command(image_bgr, cmd_json):
     """
@@ -96,21 +91,19 @@ def apply_command(image_bgr, cmd_json):
 
     elif cmd == "grayscale":
         gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-        # Обратно в BGR, чтобы не сломать остальной пайплайн
         result = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
         return result, "✅ Чёрно-белое"
 
     elif cmd == "blur":
         strength = int(cmd_json.get("strength", 11))
         if strength % 2 == 0:
-            strength += 1          # должно быть нечётным
+            strength += 1         
         strength = max(3, min(strength, 51))
         result = cv2.GaussianBlur(image_bgr, (strength, strength), 0)
         return result, f"✅ Размытие (сила={strength})"
 
     elif cmd == "brightness":
         value = int(cmd_json.get("value", 30))
-        # convertScaleAbs(src, alpha=контраст, beta=яркость)
         result = cv2.convertScaleAbs(image_bgr, alpha=1.0, beta=value)
         return result, f"✅ Яркость изменена на {value:+d}"
 
@@ -140,7 +133,7 @@ def apply_command(image_bgr, cmd_json):
         return result, "✅ Выделены края (Canny)"
 
     elif cmd == "reset":
-        return None, "✅ Сброс к оригиналу"   # None — сигнал сброса
+        return None, "✅ Сброс к оригиналу"   
 
     elif cmd == "error":
         return image_bgr, f"❌ Ошибка: {cmd_json.get('message', '')}"
@@ -149,9 +142,6 @@ def apply_command(image_bgr, cmd_json):
         return image_bgr, "❓ Команда не распознана. Попробуйте иначе."
 
 
-# ─────────────────────────────────────────────
-# 3. ГРАФИЧЕСКИЙ ИНТЕРФЕЙС (Tkinter)
-# ─────────────────────────────────────────────
 
 class App:
     def __init__(self, root):
@@ -166,7 +156,6 @@ class App:
 
     # ── UI ────────────────────────────────────
     def _build_ui(self):
-        # Верхняя панель — кнопка загрузки
         top = tk.Frame(self.root, bg="#1e1e2e", pady=10)
         top.pack(fill="x", padx=20)
 
@@ -183,7 +172,7 @@ class App:
         )
         self.size_label.pack(side="left", padx=20)
 
-        # Центральная область — предпросмотр
+        
         self.canvas = tk.Label(
             self.root, bg="#2a2a3e",
             text="← Откройте изображение",
@@ -191,7 +180,7 @@ class App:
         )
         self.canvas.pack(padx=20, pady=10, fill="both", expand=True)
 
-        # Нижняя панель — ввод команды
+        
         bottom = tk.Frame(self.root, bg="#1e1e2e", pady=10)
         bottom.pack(fill="x", padx=20)
 
@@ -212,7 +201,6 @@ class App:
         )
         self.btn_run.pack(side="left")
 
-        # Статус-бар
         self.status = tk.Label(
             self.root, text="Готов к работе.",
             bg="#111827", fg="#6ee7b7",
@@ -220,7 +208,7 @@ class App:
         )
         self.status.pack(fill="x", side="bottom")
 
-        # Подсказки
+    
         hints = (
             "Примеры команд:  «Сделай чёрно-белым»  •  «Размой»  •  «Выдели края»  •  "
             "«Увеличь яркость на 50»  •  «Отрази по горизонтали»  •  «Красный канал»  •  «Сброс»"
@@ -231,7 +219,6 @@ class App:
             font=("Courier", 9), wraplength=800, justify="left"
         ).pack(fill="x", padx=20, pady=(0, 4))
 
-    # ── Загрузка файла ────────────────────────
     def load_image(self):
         path = filedialog.askopenfilename(
             filetypes=[("Images", "*.jpg *.jpeg *.png *.bmp *.webp *.tiff")]
@@ -247,7 +234,6 @@ class App:
         self._show(self.current_bgr)
         self.set_status(f"Загружено: {path.split('/')[-1]}")
 
-    # ── Отправить команду в LLM ───────────────
     def run_command(self):
         if self.current_bgr is None:
             messagebox.showwarning("Нет изображения", "Сначала откройте изображение.")
@@ -259,22 +245,18 @@ class App:
         self.btn_run.config(state="disabled", text="⏳ Думаю...")
         self.set_status("Отправляю запрос в LM Studio...")
 
-        # Запускаем в отдельном потоке, чтобы не замораживать UI
         threading.Thread(target=self._process, args=(text,), daemon=True).start()
 
     def _process(self, text):
         cmd_json = ask_llm(text)
 
-        # Применяем команду
         new_img, msg = apply_command(self.current_bgr, cmd_json)
 
-        # Если reset — возвращаем оригинал
         if new_img is None:
             new_img = self.original_bgr.copy()
 
         self.current_bgr = new_img
 
-        # Обновляем UI из главного потока
         self.root.after(0, lambda: self._after_process(msg))
 
     def _after_process(self, msg):
@@ -282,7 +264,6 @@ class App:
         self.set_status(msg)
         self.btn_run.config(state="normal", text="▶ Выполнить")
 
-    # ── Отображение изображения ───────────────
     def _show(self, bgr):
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         pil = Image.fromarray(rgb)
@@ -301,9 +282,7 @@ class App:
         self.status.config(text=f"  {msg}")
 
 
-# ─────────────────────────────────────────────
-# 4. ТОЧКА ВХОДА
-# ─────────────────────────────────────────────
+
 if __name__ == "__main__":
     root = tk.Tk()
     root.geometry("860x640")
