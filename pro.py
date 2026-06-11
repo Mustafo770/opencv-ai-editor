@@ -52,7 +52,7 @@ SYSTEM_PROMPT = """Ты — помощник для редактирования
 def ask_llm(user_text):
     """Отправляет текст в LM Studio и получает JSON-команду."""
     payload = {
-        "model": "qwen2.5-coder-7b-instruct-spider-baseline",  # LM Studio игнорирует это поле — грузит загруженную модель
+        "model": "qwen2.5-coder-7b-instruct-spider-baseline",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user",   "content": user_text}
